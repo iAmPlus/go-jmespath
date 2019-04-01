@@ -173,6 +173,40 @@ func TestCanSupportProjectionsWithStructs(t *testing.T) {
 	assert.Equal([]interface{}{"first", "second", "third"}, result)
 }
 
+func TestCanSupportCustomMaps(t *testing.T) {
+	type CustomMap map[string]interface{}
+	assert := assert.New(t)
+	data := map[string]interface{} {
+		"a" : CustomMap {
+			"a1" : "v1",
+			"a2" : "v2",
+		},
+		"b" : CustomMap {
+			"b1" : "x1",
+			"b2" : "x2",
+		},
+	}
+	result, err := Search("a.a1", data)
+	assert.Nil(err)
+	assert.Equal("v1", result)
+
+	result, err = Search("length(a)", data)
+	assert.Nil(err)
+	assert.Equal(2.0, result)
+
+	result, err = Search("merge(a, b)", data)
+	assert.Nil(err)
+	assert.Equal(map[string]interface{}{"a1": "v1", "a2": "v2", "b1": "x1", "b2": "x2"}, result)
+
+	result, err = Search("keys(a)", data)
+	assert.Nil(err)
+	assert.ElementsMatch([]interface{}{"a1", "a2"}, result)
+
+	result, err = Search("values(a)", data)
+	assert.Nil(err)
+	assert.ElementsMatch([]interface{}{"v1", "v2"}, result)
+}
+
 func TestCanSupportSliceOfStructsWithFunctions(t *testing.T) {
 	assert := assert.New(t)
 	data := []scalars{scalars{"a1", "b1"}, scalars{"a2", "b2"}}

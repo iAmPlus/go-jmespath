@@ -80,6 +80,14 @@ func (intr *treeInterpreter) Execute(node ASTNode, value interface{}) (interface
 			key := node.value.(string)
 			return m[key], nil
 		}
+		if isMapWithStringKey(value) {
+			key := reflect.ValueOf(node.value.(string))
+			val := reflect.ValueOf(value)
+			res := val.MapIndex(key)
+			if res.IsValid() {
+				return res.Interface(), nil
+			}
+		}
 		return intr.fieldFromStruct(node.value.(string), value)
 	case ASTFilterProjection:
 		left, err := intr.Execute(node.children[0], value)

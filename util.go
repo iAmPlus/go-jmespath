@@ -183,3 +183,18 @@ func isSliceType(v interface{}) bool {
 	}
 	return reflect.TypeOf(v).Kind() == reflect.Slice
 }
+
+func isMap(obj interface{}, keyKind reflect.Kind) bool {
+	if obj == nil {
+		return false
+	}
+
+	objType := reflect.TypeOf(obj)
+
+	return objType.Kind() == reflect.Map &&
+		(keyKind == reflect.Invalid || keyKind == objType.Key().Kind())
+}
+
+func isMapWithStringKey(obj interface{}) bool {
+	return isMap(obj, reflect.String)
+}

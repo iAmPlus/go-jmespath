@@ -26,7 +26,7 @@ import (
 import (
 	"encoding/json"
 
-	"github.com/jmespath/go-jmespath"
+	"github.com/iAmPlus/go-jmespath"
 )
 
 func errMsg(msg string, a ...interface{}) int {

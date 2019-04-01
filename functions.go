@@ -365,6 +365,9 @@ func (a *argSpec) typeCheck(arg interface{}) error {
 			if _, ok := arg.(map[string]interface{}); ok {
 				return nil
 			}
+			if isMapWithStringKey(arg) {
+				return nil
+			}
 		case jpArrayNumber:
 			if _, ok := toArrayNum(arg); ok {
 				return nil
@@ -415,6 +418,9 @@ func jpfLength(arguments []interface{}) (interface{}, error) {
 		return float64(v.Len()), nil
 	} else if c, ok := arg.(map[string]interface{}); ok {
 		return float64(len(c)), nil
+	} else if isMapWithStringKey(arg) {
+		v := reflect.ValueOf(arg)
+		return float64(v.Len()), nil
 	}
 	return nil, errors.New("could not compute length()")
 }
@@ -426,15 +432,16 @@ func jpfStartsWith(arguments []interface{}) (interface{}, error) {
 }
 
 func jpfAvg(arguments []interface{}) (interface{}, error) {
-	// We've already type checked the value so we can safely use
-	// type assertions.
-	args := arguments[0].([]interface{})
-	length := float64(len(args))
-	numerator := 0.0
-	for _, n := range args {
-		numerator += n.(float64)
+	args, ok := arguments[0].([]interface{})
+	if ok {
+		length := float64(len(args))
+		numerator := 0.0
+		for _, n := range args {
+			numerator += n.(float64)
+		}
+		return numerator / length, nil
 	}
-	return numerator / length, nil
+	return 0.0, fmt.Errorf("Argument is not a array : %v", arguments)
 }
 func jpfCeil(arguments []interface{}) (interface{}, error) {
 	val := arguments[0].(float64)
@@ -517,9 +524,21 @@ func jpfMax(arguments []interface{}) (interface{}, error) {
 func jpfMerge(arguments []interface{}) (interface{}, error) {
 	final := make(map[string]interface{})
 	for _, m := range arguments {
-		mapped := m.(map[string]interface{})
-		for key, value := range mapped {
-			final[key] = value
+		mapped, ok := m.(map[string]interface{})
+		if ok {
+			for key, value := range mapped {
+				final[key] = value
+			}
+		}
+		if isMapWithStringKey(m) {
+			iter := reflect.ValueOf(m).MapRange()
+			for iter.Next() {
+				k := iter.Key().String()
+				v := iter.Value()
+				if v.IsValid() {
+					final[k] = v.Interface()
+				}
+			}
 		}
 	}
 	return final, nil
@@ -694,23 +713,51 @@ func jpfType(arguments []interface{}) (interface{}, error) {
 	if arg == true || arg == false {
 		return "boolean", nil
 	}
+	if isMapWithStringKey(arg) {
+		return "object", nil
+	}
 	return nil, errors.New("unknown type")
 }
 func jpfKeys(arguments []interface{}) (interface{}, error) {
-	arg := arguments[0].(map[string]interface{})
-	collected := make([]interface{}, 0, len(arg))
-	for key := range arg {
-		collected = append(collected, key)
+	arg, ok := arguments[0].(map[string]interface{})
+	if ok {
+		collected := make([]interface{}, 0, len(arg))
+		for key := range arg {
+			collected = append(collected, key)
+		}
+		return collected, nil
+	} else if isMapWithStringKey(arguments[0]) {
+		m := reflect.ValueOf(arguments[0])
+		keys := m.MapKeys()
+		collected := make([]interface{}, 0, len(keys))
+		for _, val := range keys {
+			collected = append(collected, val.String())
+		}
+		return collected, nil
 	}
-	return collected, nil
+	return nil, fmt.Errorf("Invalid argument to keys function : %v", arguments[0])
 }
 func jpfValues(arguments []interface{}) (interface{}, error) {
-	arg := arguments[0].(map[string]interface{})
-	collected := make([]interface{}, 0, len(arg))
-	for _, value := range arg {
-		collected = append(collected, value)
+	arg, ok := arguments[0].(map[string]interface{})
+	if ok {
+		collected := make([]interface{}, 0, len(arg))
+		for _, value := range arg {
+			collected = append(collected, value)
+		}
+		return collected, nil
+	} else if isMapWithStringKey(arguments[0]) {
+		m := reflect.ValueOf(arguments[0])
+		collected := make([]interface{}, 0, m.Len())
+		iter := m.MapRange()
+		for iter.Next() {
+			v := iter.Value()
+			if v.IsValid() {
+				collected = append(collected, v.Interface())
+			}
+		}
+		return collected, nil
 	}
-	return collected, nil
+	return nil, fmt.Errorf("Invalid argument to keys function : %v", arguments[0])
 }
 func jpfSort(arguments []interface{}) (interface{}, error) {
 	if items, ok := toArrayNum(arguments[0]); ok {
@@ -782,13 +829,16 @@ func jpfReverse(arguments []interface{}) (interface{}, error) {
 		}
 		return string(r), nil
 	}
-	items := arguments[0].([]interface{})
-	length := len(items)
-	reversed := make([]interface{}, length)
-	for i, item := range items {
-		reversed[length-(i+1)] = item
+	items, ok := arguments[0].([]interface{})
+	if ok {
+		length := len(items)
+		reversed := make([]interface{}, length)
+		for i, item := range items {
+			reversed[length-(i+1)] = item
+		}
+		return reversed, nil
 	}
-	return reversed, nil
+	return nil, fmt.Errorf("Expected string or array : %v", arguments[0])
 }
 func jpfToArray(arguments []interface{}) (interface{}, error) {
 	if _, ok := arguments[0].([]interface{}); ok {
@@ -828,6 +878,9 @@ func jpfToNumber(arguments []interface{}) (interface{}, error) {
 		return nil, nil
 	}
 	if arg == true || arg == false {
+		return nil, nil
+	}
+	if isMapWithStringKey(arg) {
 		return nil, nil
 	}
 	return nil, errors.New("unknown type")
